@@ -12,17 +12,22 @@ Author: Pedro Carvalho
 */
 
 $(() => {
-	const CANVAS_SIZE = [1000,1000]
+	const CANVAS_SIZE = [window.innerWidth,window.innerHeight]
 	const STEP_SIZE = 15
-	const NODE_MAX = 3000
+	const NODE_MAX = 4000
 	const NEIGHBORHOOD_RADIUS = 40
-	const DELAY = 2
+	const DELAY = 20
 
+	let NODE_LOOP, TEMP_OBSTACLE
+	let STATE = "READY"
+	let CONNECTED = false //Flag to define if we start and end points are connected
 	let NODES = []  // Node defined as { x, y, cost, children }
 	let OBSTACLES = [
 						[[250,250], [250, 400], [100,400], [100,250]], 
-						[[750,610], [750, 600], [300,600], [300,610]]
+						[[750,510], [750, 500], [300,500], [300,510]]
 					]
+	let START = sample()
+	let END = sample()
 
 	const c = document.getElementById("rrt-canvas")
 	let ctx = c.getContext("2d")
@@ -33,24 +38,54 @@ $(() => {
 		ctx.clearRect(0, 0, CANVAS_SIZE[0], CANVAS_SIZE[1]);
 	}
 
-	function addVertices(nodes){
-		nodes.forEach((n,i) => {
-			ctx.fillStyle = i > 0 ? "#0000FF" : "#00FF00";
-			ctx.fillRect(n.x-2,n.y-2,4,4);
+	function addVertices(){
+		NODES.filter(n => !n.isPath).forEach((n,i) => {
+			ctx.fillStyle = "#0000FF"
+			ctx.fillRect(n.x-2,n.y-2,4,4)
+		})
+		//Add starting node last
+		addPoint(NODES[0], "#00FF00")
+	}
+
+	function addPoint(point, color, radius){
+		ctx.fillStyle = color
+		ctx.strokeStyle = "#333333"
+		ctx.lineWidth = 1
+		ctx.beginPath()
+		ctx.arc(point.x, point.y, radius || 6, 0, 2 * Math.PI)
+		ctx.fill()
+		ctx.stroke()	
+	}
+
+	function addEdge(point1, point2, color, lineWidth){
+		ctx.strokeStyle = color || "#0000FF"
+		ctx.lineWidth = lineWidth || 1
+		ctx.beginPath()
+		ctx.moveTo(point1.x, point1.y)
+		ctx.lineTo(point2.x, point2.y)
+		ctx.stroke()	
+	} 
+
+	function addEdges(){
+		NODES.forEach(n => {
+			n.children.filter(c => !NODES[c].isPath).forEach(c => addEdge(n, NODES[c]))
 		})
 	}
 
-	function addEdges(nodes){
-		ctx.strokeStyle = "#0000FF";
-		nodes.forEach(n => {
-			n.children.forEach(c => {
-				ctx.strokeStyle = edgeCollision(n, nodes[c]) ?  "#FF0000" : "#0000FF";
-				ctx.beginPath()
-				ctx.moveTo(n.x, n.y)
-				ctx.lineTo(nodes[c].x, nodes[c].y)
-				ctx.stroke()
-			})
+	function addPath(){
+		//Add edges
+		NODES.filter(n => n.isPath).forEach(n => {
+			n.children.filter(c => NODES[c].isPath).forEach(c => addEdge(n, NODES[c], "#49D552", 4))
 		})
+
+		//Add points
+		NODES.filter(n => n.isPath).forEach((n,i) => {
+			ctx.fillStyle = "#49D552"
+			ctx.fillRect(n.x-2,n.y-2,4,4)
+		})
+
+		//Add starting node last
+		addPoint(NODES[0], "#00FF00")
 	}
 
 	function addRadius(point){
@@ -74,6 +109,19 @@ $(() => {
 			ctx.fillStyle = "#008080"
 			ctx.fill();
 		})
+	}
+
+	function addPartialObstacle(){
+			ctx.beginPath();
+			TEMP_OBSTACLE.forEach((v,i) => {
+				if(i === 0) {
+					ctx.moveTo(v[0],v[1])
+				} else {
+					ctx.lineTo(v[0],v[1]);
+				}			
+			})
+			ctx.strokeStyle = "#008080"
+			ctx.stroke();
 	}
 
 	function pointInPolygon(point, vs){
@@ -153,8 +201,8 @@ $(() => {
 	function getBestParent(point){
 		let currCost, neighbors = getNeighbors(point)
 		return neighbors.reduce((best, neighbor) => {
-			currCost = NODES[neighbor].cost + getDistance(point, NODES[neighbor]) && !edgeCollision(point, NODES[neighbor])
-			if(best[1] === null || currCost < best[1]) best = [neighbor, currCost]
+			currCost = NODES[neighbor].cost + getDistance(point, NODES[neighbor])
+			if(!edgeCollision(point, NODES[neighbor]) && (best[1] === null || currCost < best[1])) best = [neighbor, currCost]
 			return best
 		}, [0, null])
 	}
@@ -182,6 +230,36 @@ $(() => {
 		}
 	}
 
+	//Try to connect the tree to the final node. Return true if successful
+	function connect(node, endpoint){
+		let dist = getDistance(node, endpoint)
+		if(dist < NEIGHBORHOOD_RADIUS && !edgeCollision(node, endpoint)){
+			endpoint.children = []
+			endpoint.cost = node.cost + dist
+			NODES.push(endpoint)
+			NODES[NODES.length-2].children.push(NODES.length-1)
+			search(NODES[0])
+			return true
+		}
+		return false
+	}
+
+	//Search for the end node using DFS
+	function search(node){
+		node.isPath = false
+		//This is the end node!
+		if(JSON.stringify(node) === JSON.stringify(NODES[NODES.length-1])) {
+			node.isPath = true
+			return true
+		}
+		//Loop though the children until you find a path
+		for (let i = 0; i < node.children.length; i++) {
+			node.isPath = search(NODES[node.children[i]])
+			if(node.isPath) break
+		}
+		return node.isPath
+	}
+
 	//Check for colision against existing nodes and c-obstacles
 	function pointCollision(point){
 		//Check to see if the point matches any existing point and check for collision against c-obstacles
@@ -197,17 +275,132 @@ $(() => {
 		return point
 	}
 
-	//Execute main code
-	function rrt(start, end){
-		let qRand, qNear, qNew
-		start.cost = 0
-		start.children = []
+	//Setup operations
+	function init(){
+		NODES = []
 
+		START.cost = 0
+		START.children = []
 		//Add starting node to the tree
-		NODES.push(start)
+		NODES.push(START)
+		clearCanvas()
+		addObstacles()
+		addVertices()
+		addPoint(END, "#FF0000")
+	}
 
+	function displayError(errorMsg){
+		$("#error-msg > h4").text(errorMsg)
+		$("#error-msg").fadeIn(200)
+		setTimeout(() => { $("#error-msg").fadeOut(400)}, 2000)
+	}
 
-		let nodeLoop = setInterval(() => {
+	function handleStart(){
+		STATE = "RUNNING"
+		$("#start-btn").text("Stop")
+		$(".settings-btn").prop('disabled', true)
+	}
+
+	function handleEnd(){
+		clearInterval(NODE_LOOP)
+		STATE = "READY"
+		$("#start-btn").text("Find Path")
+		$(".settings-btn").prop('disabled', false)
+	}
+
+	function handleGoalPoints(){
+		if(STATE !== "ADD_START" && STATE !== "ADD_END") {
+			STATE = "ADD_START"
+			$("#start-end-btn").text("Cancel")
+			$("#start-btn, #obstacles-btn, #settings-btn").prop('disabled', true)
+		} else {
+			STATE = "READY"
+			$("#start-btn, #obstacles-btn, #settings-btn").prop('disabled', false)
+			$("#start-end-btn").text("Add Start/End")
+			init()
+		}
+
+	}
+
+	function handleAddStart(point){
+		if(pointCollision(point)) {
+			displayError("Start Point Must Be Collision Free")
+		} else {
+			START = point
+			STATE = "ADD_END"
+		}
+	}
+
+	function handleAddEnd(point){
+		if(pointCollision(point)) {
+			displayError("End Point Must Be Collision Free")
+		} else {
+			END = point
+			handleGoalPoints()
+		}
+	}
+
+	function handleAddObstaclePoint(point){
+		if(pointCollision(point)){
+			displayError("Obstacle Vertex Must Be Collision Free")
+		} else {
+			if(TEMP_OBSTACLE.length){
+				let prevPoint = TEMP_OBSTACLE[TEMP_OBSTACLE.length-1]
+				//If this line will be in collision, don't add
+				console.log(lineInPolygon([point, {x:prevPoint[0], y:prevPoint[1]}], TEMP_OBSTACLE))
+				TEST_OBSTACLE = TEMP_OBSTACLE.slice(0,-1) //Remove the previous line. We don't have to compare to the previous line.
+				if(getDistance(point, {x:TEMP_OBSTACLE[0][0], y:TEMP_OBSTACLE[0][1]}) <= 6) TEST_OBSTACLE = TEST_OBSTACLE.slice(1) //If we're close enough to the first vertex, we'll close the plygon so don't check
+				console.log("TESTING VERTICES", getDistance(point, {x:TEMP_OBSTACLE[0][0], y:TEMP_OBSTACLE[0][1]}) <= 6)
+				if(TEST_OBSTACLE.length > 1 && lineInPolygon([point, {x:prevPoint[0], y:prevPoint[1]}], TEST_OBSTACLE) || edgeCollision(point, {x:prevPoint[0], y:prevPoint[1]})){
+					displayError("Obstacle Edge Must Be Collision Free")
+				} else {
+					//Check if you can close the polygon
+					if(TEMP_OBSTACLE.length > 1 && getDistance(point, {x:TEMP_OBSTACLE[0][0], y:TEMP_OBSTACLE[0][1]}) <= 6) {
+						OBSTACLES.push(TEMP_OBSTACLE)
+						TEMP_OBSTACLE = []
+						if(pointCollision(START)) START = sample()
+						if(pointCollision(END)) END = sample()
+						$("#obstacles-btn").text("Done")
+					//If you can't close the polygon, just add an extra point
+					} else {
+						TEMP_OBSTACLE.push([point.x,point.y])
+						console.log(TEMP_OBSTACLE)
+					}	
+				}
+			//This is the first point, just add it.
+			} else {
+				TEMP_OBSTACLE.push([point.x,point.y])
+				$("#obstacles-btn").text("Cancel")
+				console.log(TEMP_OBSTACLE)
+			}
+		}
+	}
+
+	function handleAddObstacles(){
+		TEMP_OBSTACLE = []
+		if(STATE === "ADD_OBSTACLE") {
+			STATE = "READY"
+			$("#start-btn, #start-end-btn, #settings-btn").prop('disabled', false)
+			$("#obstacles-btn").text("Add Obstacles")
+			init()
+		} else {
+			OBSTACLES = []
+			STATE = "ADD_OBSTACLE"
+			$("#start-btn, #start-end-btn, #settings-btn").prop('disabled', true)
+			$("#obstacles-btn").text("Done")
+		}
+	}
+
+	//Execute main code
+	function rrt(){
+		let qRand, qNear, qNew
+
+		init()
+
+		//Handle GUI start
+		handleStart()
+
+		NODE_LOOP = setInterval(() => {
 			qRand = sample()
 			qNear = getClosest(qRand) //This is the index of qNear
 			qNew = getCandidate(qRand, qNear)
@@ -216,33 +409,89 @@ $(() => {
 			if(qNew) {
 				//Once we get qNew, we check for the best parent
 				qParent = getBestParent(qNew)
-				console.log("Candidate Collision?", edgeCollision(qNew, NODES[qNear]), "Parent Collision?", edgeCollision(qNew, qParent))
-				// console.log("qRand", qRand, "qNearIdx", qNear, "qNew", qNew, "qParent", qParent)
 				qNew.cost = qParent[1]
 				qNew.children = []
 
+				//Push the new node (and edge) into the tree
 				NODES.push(qNew)
 				NODES[qParent[0]].children.push(NODES.length-1)
+
+				//Rewire the tree to get shorter paths
 				rewireTree(qNew)
 
+				//Check if we can connect to the end-point
+				CONNECTED = connect(qNew, END)
+
+				//Render onto the canvas
 				clearCanvas()
 				addObstacles()
-				addRadius(JSON.parse(JSON.stringify(qNew)))
-				addEdges(JSON.parse(JSON.stringify(NODES)))
-				addVertices(JSON.parse(JSON.stringify(NODES)))
-				
+				addEdges()
+				addVertices()
+				if(CONNECTED) addPath()
+				addPoint(END, "#FF0000") //Add Endpoint
+
 				//Continue while start and end nodes are not connected and maximum number of nodes has not been reached
-				if(NODES.length >= NODE_MAX) clearInterval(nodeLoop)
+				if(NODES.length >= NODE_MAX || CONNECTED){
+					handleEnd()
+				} else {
+					addRadius(JSON.parse(JSON.stringify(qNew)))
+				}
 			}
 		}, DELAY)
-
 	}
 
 	$("#rrt-canvas").on("click",(ev) => {
-		console.log("point in polygon?", pointInPolygon([ev.pageX, ev.pageY], OBSTACLES[0]))
+		switch(STATE){
+			case "ADD_START":
+				handleAddStart({x:ev.pageX, y:ev.pageY})
+				break
+			case "ADD_END":
+				handleAddEnd({x:ev.pageX, y:ev.pageY})
+			case "ADD_OBSTACLE":
+				handleAddObstaclePoint({x:ev.pageX, y:ev.pageY})
+		}
 	})
 
-	//Run rrt
-	rrt({x:CANVAS_SIZE[0]/2, y:CANVAS_SIZE[1]/2})
+	$("#rrt-canvas").on("mousemove", (ev) => {
+		switch(STATE){
+			case "ADD_START":
+				clearCanvas()
+				addObstacles()
+				if(!pointCollision({x:ev.pageX, y:ev.pageY})) addPoint({x:ev.pageX, y:ev.pageY}, "#00FF00")
+				break
+			case "ADD_END":
+				clearCanvas()
+				addObstacles()
+				addPoint(START, "#00FF00")
+				if(!pointCollision({x:ev.pageX, y:ev.pageY})) addPoint({x:ev.pageX, y:ev.pageY}, "#FF0000")
+				break;
+			case "ADD_OBSTACLE":
+				let l = TEMP_OBSTACLE.length
+				clearCanvas()
+				addObstacles()
+				addPoint(START, "#00FF00")
+				addPoint(END, "#FF0000")
+				if(!pointCollision({x:ev.pageX, y:ev.pageY})) addPoint({x:ev.pageX, y:ev.pageY}, "#008080")
+				if(l >= 2) addPartialObstacle()
+				if(l >= 1) addEdge({x:TEMP_OBSTACLE[l-1][0], y:TEMP_OBSTACLE[l-1][1]}, {x:ev.pageX, y:ev.pageY}, "#008080") 
+				break
+		}
+	})
+
+	$("#start-btn").on("click",(ev) => {
+		switch(STATE){
+			case "RUNNING":
+				handleEnd()
+				break
+			case "READY":
+				rrt()
+				break
+		}
+	})
+
+	$("#start-end-btn").on("click", handleGoalPoints)
+	$("#obstacles-btn").on("click", handleAddObstacles)
+
+	init()
 
 })

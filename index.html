@@ -22,7 +22,17 @@
     <p class="browserupgrade">You are using an <strong>outdated</strong> browser. Please <a href="https://browsehappy.com/">upgrade your browser</a> to improve your experience and security.</p>
   <![endif]-->
 
-  <!-- Add your site or application content here -->
+  <div id="customize-panel">
+    <!-- <h2 id="title">Customize</h2> -->
+    <div class="btn-group">
+      <button id="start-btn">Find Path</button>
+      <button class="settings-btn" id="start-end-btn">Add Start/End</button>
+      <button class="settings-btn" id="obstacles-btn">Add Obstacles</button>
+      <button class="settings-btn" id="settings-btn">Settings</button>
+    </div>
+
+  </div>
+  <div id="error-msg"><h4>You are doing something wrong...</h4></div>
   <canvas id="rrt-canvas" width="500" height="500"></canvas>
   <script src="js/vendor/modernizr-3.7.1.min.js"></script>
   <script src="https://code.jquery.com/jquery-3.3.1.min.js" integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8=" crossorigin="anonymous"></script>
