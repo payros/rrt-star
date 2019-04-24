@@ -23,6 +23,7 @@ $(() => {
 		COLORS_ON:true,
 		RRT:false
 	}
+	let DEFAULT_COLOR = "#0000FF"
 	let STATE = "READY"
 	let CONNECTED = false //Flag to define if we start and end points are connected
 	let NODES = []  // Node defined as { x, y, cost, children }
@@ -69,7 +70,7 @@ $(() => {
 
 	function addVertices(){
 		NODES.filter(n => !n.isPath).forEach((n,i) => {
-			ctx.fillStyle = SETTINGS.COLORS_ON ? costToColor(n.cost) : "#0000FF"
+			ctx.fillStyle = SETTINGS.COLORS_ON ? costToColor(n.cost) : DEFAULT_COLOR
 			ctx.fillRect(n.x-2,n.y-2,4,4)
 		})
 		//Add starting node last
@@ -87,7 +88,7 @@ $(() => {
 	}
 
 	function addEdge(point1, point2, color, lineWidth){
-		ctx.strokeStyle = color || (SETTINGS.COLORS_ON ? costToColor(point1.cost) : "#0000FF")
+		ctx.strokeStyle = color || (SETTINGS.COLORS_ON ? costToColor(point1.cost) : DEFAULT_COLOR)
 		ctx.lineWidth = lineWidth || 1
 		ctx.beginPath()
 		ctx.moveTo(point1.x, point1.y)
@@ -290,7 +291,7 @@ $(() => {
 		return node.isPath
 	}
 
-	//Check for colision against existing nodes and c-obstacles
+	//Check for collision against existing nodes and c-obstacles
 	function pointCollision(point){
 		//Check to see if the point matches any existing point and check for collision against c-obstacles
 		return NODES.reduce((bool, n) => bool || n.x === point.x && n.y === point.y, false) || OBSTACLES.reduce((bool, o) => bool = bool || pointInPolygon([point.x, point.y], o), false)
@@ -422,6 +423,7 @@ $(() => {
 			$("#obstacles-btn").text("Add Obstacles")
 			init()
 		} else {
+			NODES =[]
 			OBSTACLES = []
 			STATE = "ADD_OBSTACLE"
 			$("#start-btn, #start-end-btn, #settings-btn").prop('disabled', true)
