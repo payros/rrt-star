@@ -21,7 +21,7 @@ $(() => {
 		NEIGHBORHOOD_RADIUS:40,
 		DELAY:20,
 		COLORS_ON:true,
-		RRT:true
+		RRT:false
 	}
 	let STATE = "READY"
 	let CONNECTED = false //Flag to define if we start and end points are connected
