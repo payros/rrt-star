@@ -20,7 +20,8 @@ $(() => {
 		NODE_MAX:4000,
 		NEIGHBORHOOD_RADIUS:40,
 		DELAY:20,
-		COLORS_ON:true
+		COLORS_ON:true,
+		RRT:true
 	}
 	let STATE = "READY"
 	let CONNECTED = false //Flag to define if we start and end points are connected
@@ -326,7 +327,7 @@ $(() => {
 
 	function setInput(){
 		for(let SETTING in SETTINGS){
-			if(SETTING === 'COLORS_ON'){
+			if(SETTING === 'COLORS_ON' || SETTING === 'RRT'){
 				$("input[name=" + SETTING + "]").prop('checked', SETTINGS[SETTING])
 			} else {
 				$("input[name=" + SETTING + "]").val(SETTINGS[SETTING])
@@ -429,7 +430,7 @@ $(() => {
 	}
 
 	function handleInputChange(ev){
-		if(ev.target.name === 'COLORS_ON'){
+		if(ev.target.type === 'checkbox'){
 			SETTINGS[ev.target.name] = ev.target.checked
 		} else {
 			SETTINGS[ev.target.name] = ev.target.value
@@ -454,16 +455,16 @@ $(() => {
 			//If we couldn't find a suitable qNew, we're probably too close to the edge. Just pick a new point
 			if(qNew) {
 				//Once we get qNew, we check for the best parent
-				qParent = getBestParent(qNew)
-				qNew.cost = qParent[1]
+				if(!SETTINGS.RRT) qParent = getBestParent(qNew)
+				qNew.cost = SETTINGS.RRT ? NODES[qNear].cost + getDistance(qNew, NODES[qNear]) : qParent[1]
 				qNew.children = []
 
 				//Push the new node (and edge) into the tree
 				NODES.push(qNew)
-				NODES[qParent[0]].children.push(NODES.length-1)
+				NODES[(SETTINGS.RRT ? qNear : qParent[0])].children.push(NODES.length-1)
 
 				//Rewire the tree to get shorter paths
-				rewireTree(qNew)
+				if(!SETTINGS.RRT) rewireTree(qNew)
 
 				//Check if we can connect to the end-point
 				CONNECTED = connect(qNew, END)
@@ -483,7 +484,7 @@ $(() => {
 				if(NODES.length >= SETTINGS.NODE_MAX || CONNECTED){
 					handleEnd()
 				} else {
-					addRadius(JSON.parse(JSON.stringify(qNew)))
+					if(!SETTINGS.RRT) addRadius(JSON.parse(JSON.stringify(qNew)))
 				}
 			}
 		}, SETTINGS.DELAY)
