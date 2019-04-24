@@ -13,20 +13,21 @@ Author: Pedro Carvalho
 
 $(() => {
 	const CANVAS_SIZE = [window.innerWidth,window.innerHeight]
-	const STEP_SIZE = 15
-	const NODE_MAX = 4000
-	const NEIGHBORHOOD_RADIUS = 40
-	const DELAY = 20
 
 	let NODE_LOOP, TEMP_OBSTACLE
+	let SETTINGS = localStorage.getItem('SETTINGS') ? JSON.parse(localStorage.getItem('SETTINGS')) : {
+		STEP_SIZE:15,
+		NODE_MAX:4000,
+		NEIGHBORHOOD_RADIUS:40,
+		DELAY:20,
+		COLORS_ON:true
+	}
 	let STATE = "READY"
 	let CONNECTED = false //Flag to define if we start and end points are connected
 	let NODES = []  // Node defined as { x, y, cost, children }
-	let OBSTACLES = [
-						[[250,250], [250, 400], [100,400], [100,250]], 
-						[[750,510], [750, 500], [300,500], [300,510]]
-					]
-	let START = sample()
+	let MAX_COST = 0
+	let OBSTACLES = []
+	let START = {x:CANVAS_SIZE[0]/2, y:CANVAS_SIZE[1]/2}
 	let END = sample()
 
 	const c = document.getElementById("rrt-canvas")
@@ -34,13 +35,40 @@ $(() => {
 	ctx.canvas.width  = CANVAS_SIZE[0]
 	ctx.canvas.height = CANVAS_SIZE[1]
 
+	function decimalToHex(d, padding) {
+	    var hex = Number(d).toString(16);
+	    padding = typeof (padding) === "undefined" || padding === null ? padding = 2 : padding;
+
+	    while (hex.length < padding) {
+	        hex = "0" + hex;
+	    }
+
+	    return hex;
+	}
+
+	function costToColor(num) {
+	  let R,G,B
+	  if(num < MAX_COST/2){
+	  	const color = 255-Math.round(num * 255 / (MAX_COST/2))
+	  	R = "00"
+	  	G = decimalToHex(color,2)
+	  	B = decimalToHex(255-color,2)		
+	  } else {
+	  	const color = 255-Math.round((num - MAX_COST/2) * 255 / (MAX_COST - MAX_COST/2))
+	  	R = decimalToHex(255-color,2)	
+		G = "00"
+		B = decimalToHex(color,2)
+	  }	
+	  return "#" + R + G + B
+	}
+
 	function clearCanvas(){
 		ctx.clearRect(0, 0, CANVAS_SIZE[0], CANVAS_SIZE[1]);
 	}
 
 	function addVertices(){
 		NODES.filter(n => !n.isPath).forEach((n,i) => {
-			ctx.fillStyle = "#0000FF"
+			ctx.fillStyle = SETTINGS.COLORS_ON ? costToColor(n.cost) : "#0000FF"
 			ctx.fillRect(n.x-2,n.y-2,4,4)
 		})
 		//Add starting node last
@@ -58,7 +86,7 @@ $(() => {
 	}
 
 	function addEdge(point1, point2, color, lineWidth){
-		ctx.strokeStyle = color || "#0000FF"
+		ctx.strokeStyle = color || (SETTINGS.COLORS_ON ? costToColor(point1.cost) : "#0000FF")
 		ctx.lineWidth = lineWidth || 1
 		ctx.beginPath()
 		ctx.moveTo(point1.x, point1.y)
@@ -91,7 +119,7 @@ $(() => {
 	function addRadius(point){
 		ctx.strokeStyle = "#FF0000"
 		ctx.beginPath()
-		ctx.arc(point.x, point.y, NEIGHBORHOOD_RADIUS, 0, 2 * Math.PI)
+		ctx.arc(point.x, point.y, SETTINGS.NEIGHBORHOOD_RADIUS, 0, 2 * Math.PI)
 		ctx.stroke()
 	}
 
@@ -145,8 +173,9 @@ $(() => {
 		return OBSTACLES.reduce((bool, o) => bool || lineInPolygon([point1, point2], o),false)
 	}
 
-	function lineInPolygon(line, polygon){
+	function lineInPolygon(line, polygon, skipLast){
 		return polygon.reduce((bool, edge, i) => {
+			if(skipLast && i === polygon.length-1) return bool
 			nextIdx = i+1 < polygon.length ? i+1 : 0
 			bool = bool || intersectLineLine({x:edge[0], y:edge[1]}, {x:polygon[nextIdx][0], y:polygon[nextIdx][1]}, line[0], line[1]) 
 			return bool
@@ -173,12 +202,12 @@ $(() => {
 		const qNear = NODES[qNearIdx]
 		const totalDist = getDistance(qRand, qNear)
 		//qRand is within the stepSize and there is no edge colision
-		if(totalDist < STEP_SIZE && !edgeCollision(qNear, qRand)) {
+		if(totalDist < SETTINGS.STEP_SIZE && !edgeCollision(qNear, qRand)) {
 			return qRand
 		// qRand is too far or in collision. We have to try a closer point	
 		} else {
 			let candidate
-			let stepDist = STEP_SIZE
+			let stepDist = SETTINGS.STEP_SIZE
 			do {
 				candidate = {x:((stepDist/totalDist)*(qRand.x-qNear.x))+qNear.x, y:((stepDist/totalDist)*(qRand.y-qNear.y))+qNear.y}
 				stepDist-- //Reduce in case we are in collision so we can try again on the next iteration
@@ -192,7 +221,7 @@ $(() => {
 	function getNeighbors(point){
 		return NODES.reduce((neighbors, node, i) => {
 			let distance = getDistance(point, node)
-			if(distance > 0 && distance <= NEIGHBORHOOD_RADIUS) neighbors.push(i)
+			if(distance > 0 && distance <= SETTINGS.NEIGHBORHOOD_RADIUS) neighbors.push(i)
 			return neighbors
 		}, [])
 	}
@@ -233,7 +262,7 @@ $(() => {
 	//Try to connect the tree to the final node. Return true if successful
 	function connect(node, endpoint){
 		let dist = getDistance(node, endpoint)
-		if(dist < NEIGHBORHOOD_RADIUS && !edgeCollision(node, endpoint)){
+		if(dist < SETTINGS.NEIGHBORHOOD_RADIUS && !edgeCollision(node, endpoint)){
 			endpoint.children = []
 			endpoint.cost = node.cost + dist
 			NODES.push(endpoint)
@@ -295,6 +324,16 @@ $(() => {
 		setTimeout(() => { $("#error-msg").fadeOut(400)}, 2000)
 	}
 
+	function setInput(){
+		for(let SETTING in SETTINGS){
+			if(SETTING === 'COLORS_ON'){
+				$("input[name=" + SETTING + "]").prop('checked', SETTINGS[SETTING])
+			} else {
+				$("input[name=" + SETTING + "]").val(SETTINGS[SETTING])
+			}
+		}
+	}
+
 	function handleStart(){
 		STATE = "RUNNING"
 		$("#start-btn").text("Stop")
@@ -317,6 +356,7 @@ $(() => {
 			STATE = "READY"
 			$("#start-btn, #obstacles-btn, #settings-btn").prop('disabled', false)
 			$("#start-end-btn").text("Add Start/End")
+			$("#rrt-canvas").css("cursor","pointer")
 			init()
 		}
 
@@ -347,11 +387,9 @@ $(() => {
 			if(TEMP_OBSTACLE.length){
 				let prevPoint = TEMP_OBSTACLE[TEMP_OBSTACLE.length-1]
 				//If this line will be in collision, don't add
-				console.log(lineInPolygon([point, {x:prevPoint[0], y:prevPoint[1]}], TEMP_OBSTACLE))
 				TEST_OBSTACLE = TEMP_OBSTACLE.slice(0,-1) //Remove the previous line. We don't have to compare to the previous line.
-				if(getDistance(point, {x:TEMP_OBSTACLE[0][0], y:TEMP_OBSTACLE[0][1]}) <= 6) TEST_OBSTACLE = TEST_OBSTACLE.slice(1) //If we're close enough to the first vertex, we'll close the plygon so don't check
-				console.log("TESTING VERTICES", getDistance(point, {x:TEMP_OBSTACLE[0][0], y:TEMP_OBSTACLE[0][1]}) <= 6)
-				if(TEST_OBSTACLE.length > 1 && lineInPolygon([point, {x:prevPoint[0], y:prevPoint[1]}], TEST_OBSTACLE) || edgeCollision(point, {x:prevPoint[0], y:prevPoint[1]})){
+				if(getDistance(point, {x:TEMP_OBSTACLE[0][0], y:TEMP_OBSTACLE[0][1]}) <= 6) TEST_OBSTACLE = TEST_OBSTACLE.slice(1) //If we're close enough to the first vertex, we'll close the polygon so don't check
+				if(TEST_OBSTACLE.length > 1 && lineInPolygon([point, {x:prevPoint[0], y:prevPoint[1]}], TEST_OBSTACLE, true) || edgeCollision(point, {x:prevPoint[0], y:prevPoint[1]})){
 					displayError("Obstacle Edge Must Be Collision Free")
 				} else {
 					//Check if you can close the polygon
@@ -364,7 +402,6 @@ $(() => {
 					//If you can't close the polygon, just add an extra point
 					} else {
 						TEMP_OBSTACLE.push([point.x,point.y])
-						console.log(TEMP_OBSTACLE)
 					}	
 				}
 			//This is the first point, just add it.
@@ -389,6 +426,15 @@ $(() => {
 			$("#start-btn, #start-end-btn, #settings-btn").prop('disabled', true)
 			$("#obstacles-btn").text("Done")
 		}
+	}
+
+	function handleInputChange(ev){
+		if(ev.target.name === 'COLORS_ON'){
+			SETTINGS[ev.target.name] = ev.target.checked
+		} else {
+			SETTINGS[ev.target.name] = ev.target.value
+		}
+		localStorage.setItem("SETTINGS", JSON.stringify(SETTINGS))
 	}
 
 	//Execute main code
@@ -422,6 +468,9 @@ $(() => {
 				//Check if we can connect to the end-point
 				CONNECTED = connect(qNew, END)
 
+				//Update the MAX COST
+				if(SETTINGS.COLORS_ON) MAX_COST = NODES.reduce((maxCost, n) => n.cost > maxCost ? n.cost : maxCost, 0)
+
 				//Render onto the canvas
 				clearCanvas()
 				addObstacles()
@@ -431,13 +480,13 @@ $(() => {
 				addPoint(END, "#FF0000") //Add Endpoint
 
 				//Continue while start and end nodes are not connected and maximum number of nodes has not been reached
-				if(NODES.length >= NODE_MAX || CONNECTED){
+				if(NODES.length >= SETTINGS.NODE_MAX || CONNECTED){
 					handleEnd()
 				} else {
 					addRadius(JSON.parse(JSON.stringify(qNew)))
 				}
 			}
-		}, DELAY)
+		}, SETTINGS.DELAY)
 	}
 
 	$("#rrt-canvas").on("click",(ev) => {
@@ -447,6 +496,7 @@ $(() => {
 				break
 			case "ADD_END":
 				handleAddEnd({x:ev.pageX, y:ev.pageY})
+				break
 			case "ADD_OBSTACLE":
 				handleAddObstaclePoint({x:ev.pageX, y:ev.pageY})
 		}
@@ -457,14 +507,24 @@ $(() => {
 			case "ADD_START":
 				clearCanvas()
 				addObstacles()
-				if(!pointCollision({x:ev.pageX, y:ev.pageY})) addPoint({x:ev.pageX, y:ev.pageY}, "#00FF00")
+				if(!pointCollision({x:ev.pageX, y:ev.pageY})){
+					addPoint({x:ev.pageX, y:ev.pageY}, "#00FF00")
+					$("#rrt-canvas").css("cursor","grabbing")
+				} else {
+					$("#rrt-canvas").css("cursor","not-allowed")
+				}
 				break
 			case "ADD_END":
 				clearCanvas()
 				addObstacles()
 				addPoint(START, "#00FF00")
-				if(!pointCollision({x:ev.pageX, y:ev.pageY})) addPoint({x:ev.pageX, y:ev.pageY}, "#FF0000")
-				break;
+				if(!pointCollision({x:ev.pageX, y:ev.pageY})){
+					addPoint({x:ev.pageX, y:ev.pageY}, "#FF0000")
+					$("#rrt-canvas").css("cursor","grabbing")
+				} else {
+					$("#rrt-canvas").css("cursor","not-allowed")
+				}
+				break
 			case "ADD_OBSTACLE":
 				let l = TEMP_OBSTACLE.length
 				clearCanvas()
@@ -491,7 +551,11 @@ $(() => {
 
 	$("#start-end-btn").on("click", handleGoalPoints)
 	$("#obstacles-btn").on("click", handleAddObstacles)
+	$("#settings-btn").on("click", () => { setInput(); $("#modal-container").fadeIn(400) })
+	$("#close-btn, #modal-container").on("click", () => { $("#modal-container").fadeOut(200) })
+	$("#modal").on("click", (e) => { e.stopPropagation() })
+	$("input").on("change", handleInputChange)
 
-	init()
+	rrt()
 
 })

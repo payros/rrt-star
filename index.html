@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <title>RTT* Sandbox</title>
+  <title>RTT* Visualizer</title>
   <meta name="description" content="">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
@@ -21,6 +21,59 @@
   <!--[if IE]>
     <p class="browserupgrade">You are using an <strong>outdated</strong> browser. Please <a href="https://browsehappy.com/">upgrade your browser</a> to improve your experience and security.</p>
   <![endif]-->
+  <div id="error-msg"><h4>You are doing something wrong...</h4></div>
+
+  <div id="modal-container">
+    <div id="modal">
+      <h2>Settings</h2>
+      <button id="close-btn">X</button>
+      <form>
+        <table>
+          <tbody>
+            <tr>
+              <td>
+                <label for="node-distance-input">Node Distance </label>
+              </td>
+              <td>
+                <input type="number" id="node-distance-input" name="STEP_SIZE" placeholder="in pixels"/>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <label for="neighborhood-radius-input">Neighborhood Radius</label>
+              </td>
+              <td>
+                <input type="number" id="neighborhood-radius-input" name="NEIGHBORHOOD_RADIUS" placeholder="in pixels"/>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <label for="maximum-nodes-input">Maximum Nodes</label>
+              </td>
+              <td>
+                <input type="number" id="maximum-nodes-input" name="NODE_MAX" placeholder="number"/>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <label for="time-delay-input">Time Delay</label>
+              </td>
+              <td>
+                <input type="number" id="time-delay-input" name="DELAY" placeholder="in millisecs"/>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <label for="psychedelic-input">Psychedelic Colors</label>
+              </td>
+              <td>
+                <input type="checkbox" id="psychedelic-input" name="COLORS_ON"/>
+            </tr>
+          </tbody>
+        </table>
+      </form>  
+    </div>
+  </div>
 
   <div id="customize-panel">
     <!-- <h2 id="title">Customize</h2> -->
@@ -30,9 +83,8 @@
       <button class="settings-btn" id="obstacles-btn">Add Obstacles</button>
       <button class="settings-btn" id="settings-btn">Settings</button>
     </div>
-
   </div>
-  <div id="error-msg"><h4>You are doing something wrong...</h4></div>
+  
   <canvas id="rrt-canvas" width="500" height="500"></canvas>
   <script src="js/vendor/modernizr-3.7.1.min.js"></script>
   <script src="https://code.jquery.com/jquery-3.3.1.min.js" integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8=" crossorigin="anonymous"></script>
