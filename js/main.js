@@ -1,6 +1,6 @@
 /*
 
-RTT* Visualizer
+RRT* Visualizer
 Author: Pedro Carvalho
 
 1. Pick random node from qRand
@@ -491,6 +491,9 @@ $(() => {
 			}
 		}, SETTINGS.DELAY)
 	}
+
+
+	/// EVENT LISTENERS ///
 
 	$("#rrt-canvas").on("click",(ev) => {
 		switch(STATE){
